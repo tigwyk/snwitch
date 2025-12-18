@@ -1,0 +1,24 @@
+# Dependencies
+node_modules/
+package-lock.json
+
+# Build artifacts
+dist/
+build/
+*.crx
+*.xpi
+*.zip
+
+# Development files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Temporary files
+*.log
+*.tmp
+/tmp/
+
+# Icon generation script (development only)
+generate-icons.js
