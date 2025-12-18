@@ -34,10 +34,13 @@ A browser extension that integrates with Twitch Chat to highlight users who mode
 Snwitch monitors Twitch chat messages in real-time and:
 
 1. Identifies usernames in chat messages
-2. Queries the Twitch API to check if the user moderates any channels
-3. Highlights their messages with a colored background (default: Twitch purple)
-4. Adds a moderator badge (🔨) next to their username
-5. Caches results to minimize API calls and improve performance
+2. Queries the Twitch API to retrieve user profile information
+3. Uses heuristic detection by checking user descriptions for moderator-related keywords (e.g., "moderator for", "mod for", "modding for")
+4. Highlights messages from identified moderators with a colored background (default: Twitch purple)
+5. Adds a moderator badge (🔨) next to their username
+6. Caches results for 5 minutes to minimize API calls and improve performance
+
+**Note**: The extension uses a heuristic approach by analyzing user profile descriptions, as Twitch's API doesn't provide direct access to check if users moderate for other channels without special broadcaster permissions. Users who mention being moderators in their profile descriptions will be highlighted.
 
 ## Configuration
 

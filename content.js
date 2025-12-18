@@ -6,12 +6,26 @@
   // Cache for users who are moderators of other channels
   const modCache = new Map();
   
-  // Configuration
-  const config = {
+  // Configuration - will be loaded from storage
+  let config = {
+    enabled: true,
     highlightColor: '#9147ff', // Twitch purple
+    showBadge: true,
     checkInterval: 2000, // Check for new chat messages every 2 seconds
     cacheExpiry: 300000 // Cache moderator status for 5 minutes
   };
+
+  // Load configuration from storage
+  async function loadConfig() {
+    try {
+      const items = await chrome.storage.sync.get(['enabled', 'highlightColor', 'showBadge']);
+      if (items.enabled !== undefined) config.enabled = items.enabled;
+      if (items.highlightColor) config.highlightColor = items.highlightColor;
+      if (items.showBadge !== undefined) config.showBadge = items.showBadge;
+    } catch (e) {
+      console.warn('Snwitch: Could not load config', e);
+    }
+  }
 
   // Get Twitch OAuth token from the page
   function getTwitchAuthToken() {
@@ -19,7 +33,9 @@
       // Try to get the token from localStorage
       const authToken = localStorage.getItem('twilight.access_token');
       if (authToken) {
-        return JSON.parse(authToken);
+        // The token is stored as a JSON string, parse it to get the actual token value
+        const parsed = JSON.parse(authToken);
+        return parsed;
       }
     } catch (e) {
       console.warn('Snwitch: Could not retrieve Twitch auth token', e);
@@ -33,7 +49,7 @@
     return 'kimne78kx3ncx6brgo4mv6wki5h1ko';
   }
 
-  // Check if a user is a moderator using Twitch API
+  // Check if a user is a moderator using heuristic approach
   async function checkIfUserIsMod(username) {
     // Check cache first
     const cached = modCache.get(username);
@@ -50,7 +66,7 @@
         return false;
       }
 
-      // Get user ID first
+      // Get user information
       const userResponse = await fetch(`https://api.twitch.tv/helix/users?login=${username}`, {
         headers: {
           'Client-ID': clientId,
@@ -67,22 +83,13 @@
         return false;
       }
 
-      const userId = userData.data[0].id;
-
-      // Check if user moderates any channels
-      const modResponse = await fetch(`https://api.twitch.tv/helix/moderation/moderators?user_id=${userId}&first=1`, {
-        headers: {
-          'Client-ID': clientId,
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      if (!modResponse.ok) {
-        return false;
-      }
-
-      const modData = await modResponse.json();
-      const isMod = modData.data && modData.data.length > 0;
+      const userInfo = userData.data[0];
+      
+      // Heuristic approach: Check user's description for moderator-related keywords
+      // This is a simple method since we can't directly query mod status for other channels
+      const description = (userInfo.description || '').toLowerCase();
+      const modKeywords = ['moderator for', 'mod for', 'modding for', 'moderating', 'mod @', 'mod at'];
+      const isMod = modKeywords.some(keyword => description.includes(keyword));
 
       // Cache the result
       modCache.set(username, {
@@ -93,24 +100,40 @@
       return isMod;
     } catch (error) {
       console.error('Snwitch: Error checking mod status', error);
+      // Cache negative result to avoid repeated failures
+      modCache.set(username, {
+        isMod: false,
+        timestamp: Date.now()
+      });
       return false;
     }
   }
 
   // Apply highlight to chat message
   function highlightMessage(messageElement, username) {
+    if (!config.enabled) return;
+    
     if (!messageElement.hasAttribute('data-snwitch-checked')) {
       messageElement.setAttribute('data-snwitch-checked', 'true');
       messageElement.classList.add('snwitch-mod-highlight');
       
-      // Add a badge indicator
-      const usernameElement = messageElement.querySelector('.chat-author__display-name');
-      if (usernameElement && !usernameElement.querySelector('.snwitch-mod-badge')) {
-        const badge = document.createElement('span');
-        badge.className = 'snwitch-mod-badge';
-        badge.title = 'Moderates other channels';
-        badge.textContent = '🔨';
-        usernameElement.appendChild(badge);
+      // Apply custom color
+      if (config.highlightColor) {
+        const color = config.highlightColor;
+        messageElement.style.backgroundColor = `${color}26`; // 15% opacity
+        messageElement.style.borderLeftColor = color;
+      }
+      
+      // Add a badge indicator if enabled
+      if (config.showBadge) {
+        const usernameElement = messageElement.querySelector('.chat-author__display-name');
+        if (usernameElement && !usernameElement.querySelector('.snwitch-mod-badge')) {
+          const badge = document.createElement('span');
+          badge.className = 'snwitch-mod-badge';
+          badge.title = 'Moderates other channels';
+          badge.textContent = '🔨';
+          usernameElement.appendChild(badge);
+        }
       }
     }
   }
@@ -150,9 +173,33 @@
     }
   }
 
+  // Listen for configuration updates
+  chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (request.action === 'reloadConfig') {
+      loadConfig().then(() => {
+        console.log('Snwitch: Configuration reloaded');
+        // Clear all existing highlights and reprocess
+        document.querySelectorAll('[data-snwitch-checked]').forEach(el => {
+          el.removeAttribute('data-snwitch-checked');
+          el.classList.remove('snwitch-mod-highlight');
+          el.style.backgroundColor = '';
+          el.style.borderLeftColor = '';
+          const badge = el.querySelector('.snwitch-mod-badge');
+          if (badge) badge.remove();
+        });
+        processChatMessages();
+        sendResponse({ success: true });
+      });
+      return true; // Keep message channel open for async response
+    }
+  });
+
   // Initialize the extension
-  function init() {
+  async function init() {
     console.log('Snwitch: Extension initialized');
+    
+    // Load configuration first
+    await loadConfig();
     
     // Process messages periodically
     setInterval(processChatMessages, config.checkInterval);
