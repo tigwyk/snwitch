@@ -100,11 +100,7 @@
       return isMod;
     } catch (error) {
       console.error('Snwitch: Error checking mod status', error);
-      // Cache negative result to avoid repeated failures
-      modCache.set(username, {
-        isMod: false,
-        timestamp: Date.now()
-      });
+      // Do not cache negative result on error to allow retry on next message
       return false;
     }
   }
