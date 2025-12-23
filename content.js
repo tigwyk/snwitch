@@ -122,7 +122,11 @@
       
       // Add a badge indicator if enabled
       if (config.showBadge) {
-        const usernameElement = messageElement.querySelector('.chat-author__display-name');
+        // Prefer stable data attribute selector; fall back to internal class name
+        let usernameElement = messageElement.querySelector('[data-a-target="chat-message-username"]');
+        if (!usernameElement) {
+          usernameElement = messageElement.querySelector('.chat-author__display-name');
+        }
         if (usernameElement && !usernameElement.querySelector('.snwitch-mod-badge')) {
           const badge = document.createElement('span');
           badge.className = 'snwitch-mod-badge';
