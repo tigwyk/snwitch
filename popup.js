@@ -37,7 +37,15 @@ document.addEventListener('DOMContentLoaded', () => {
       // Notify content scripts to reload configuration
       chrome.tabs.query({ url: 'https://*.twitch.tv/*' }, (tabs) => {
         tabs.forEach((tab) => {
-          chrome.tabs.sendMessage(tab.id, { action: 'reloadConfig' });
+          try {
+            chrome.tabs.sendMessage(tab.id, { action: 'reloadConfig' }, () => {
+              if (chrome.runtime.lastError) {
+                console.warn('Failed to send reloadConfig message to tab', tab.id, chrome.runtime.lastError.message);
+              }
+            });
+          } catch (e) {
+            console.warn('Error sending reloadConfig message to tab', tab.id, e);
+          }
         });
       });
     });
