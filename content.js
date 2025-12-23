@@ -35,7 +35,14 @@
       if (authToken) {
         // The token is stored as a JSON string, parse it to get the actual token value
         const parsed = JSON.parse(authToken);
-        return parsed;
+        // If parsed is an object, try common fields; otherwise, if it's already a string, return it
+        if (parsed && typeof parsed === 'object') {
+          if (typeof parsed.token === 'string') return parsed.token;
+          if (typeof parsed.access_token === 'string') return parsed.access_token;
+          if (typeof parsed.value === 'string') return parsed.value;
+          return null;
+        }
+        return typeof parsed === 'string' ? parsed : null;
       }
     } catch (e) {
       console.warn('Snwitch: Could not retrieve Twitch auth token', e);
