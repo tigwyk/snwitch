@@ -112,6 +112,14 @@
     }
   }
 
+  // Convert hex color to rgba with opacity
+  function hexToRgba(hex, opacity) {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+  }
+
   // Apply highlight to chat message
   function highlightMessage(messageElement, username) {
     if (!config.enabled) return;
@@ -120,10 +128,10 @@
       messageElement.setAttribute('data-snwitch-checked', 'true');
       messageElement.classList.add('snwitch-mod-highlight');
       
-      // Apply custom color
+      // Apply custom color with consistent opacity
       if (config.highlightColor) {
         const color = config.highlightColor;
-        messageElement.style.backgroundColor = `${color}26`; // 15% opacity
+        messageElement.style.backgroundColor = hexToRgba(color, 0.15);
         messageElement.style.borderLeftColor = color;
       }
       
@@ -150,34 +158,37 @@
     // Find all chat messages
     const messages = document.querySelectorAll('[data-a-target="chat-line-message"]');
     
-    for (const message of messages) {
-      if (message.hasAttribute('data-snwitch-checked')) {
-        continue;
-      }
+    // Process messages concurrently for better performance
+    await Promise.all(
+      Array.from(messages).map(async (message) => {
+        if (message.hasAttribute('data-snwitch-checked')) {
+          return;
+        }
 
-      // Get username from the message
-      const usernameElement = message.querySelector('[data-a-target="chat-message-username"]');
-      if (!usernameElement) {
-        continue;
-      }
+        // Get username from the message
+        const usernameElement = message.querySelector('[data-a-target="chat-message-username"]');
+        if (!usernameElement) {
+          return;
+        }
 
-      const username = usernameElement.textContent.toLowerCase();
-      
-      // Don't check if the user is already a mod in this channel
-      const modBadge = message.querySelector('[aria-label*="Moderator"]');
-      if (modBadge) {
-        message.setAttribute('data-snwitch-checked', 'true');
-        continue;
-      }
+        const username = usernameElement.textContent.toLowerCase();
+        
+        // Don't check if the user is already a mod in this channel
+        const modBadge = message.querySelector('[aria-label*="Moderator"]');
+        if (modBadge) {
+          message.setAttribute('data-snwitch-checked', 'true');
+          return;
+        }
 
-      // Check if user is a mod elsewhere
-      const isMod = await checkIfUserIsMod(username);
-      if (isMod) {
-        highlightMessage(message, username);
-      } else {
-        message.setAttribute('data-snwitch-checked', 'true');
-      }
-    }
+        // Check if user is a mod elsewhere
+        const isMod = await checkIfUserIsMod(username);
+        if (isMod) {
+          highlightMessage(message, username);
+        } else {
+          message.setAttribute('data-snwitch-checked', 'true');
+        }
+      })
+    );
   }
 
   // Listen for configuration updates
@@ -201,30 +212,59 @@
     }
   });
 
+  // Track initialization state
+  let isInitialized = false;
+  let messageInterval = null;
+  let chatObserver = null;
+
   // Initialize the extension
   async function init() {
+    // Prevent multiple initializations
+    if (isInitialized) {
+      console.log('Snwitch: Already initialized, skipping');
+      return;
+    }
+    
     console.log('Snwitch: Extension initialized');
+    isInitialized = true;
     
     // Load configuration first
     await loadConfig();
     
+    // Clear any existing interval before creating a new one
+    if (messageInterval) {
+      clearInterval(messageInterval);
+    }
+    
     // Process messages periodically
-    setInterval(processChatMessages, config.checkInterval);
+    messageInterval = setInterval(processChatMessages, config.checkInterval);
     
     // Process messages immediately
     processChatMessages();
 
     // Watch for new messages using MutationObserver
-    const chatContainer = document.querySelector('.chat-scrollable-area__message-container');
+    // Try multiple selectors for better compatibility
+    let chatContainer = document.querySelector('.chat-scrollable-area__message-container');
+    if (!chatContainer) {
+      chatContainer = document.querySelector('[data-a-target="chat-scroller"]');
+    }
+    
     if (chatContainer) {
-      const observer = new MutationObserver(() => {
+      // Disconnect any existing observer before creating a new one
+      if (chatObserver) {
+        chatObserver.disconnect();
+      }
+      
+      chatObserver = new MutationObserver(() => {
         processChatMessages();
       });
       
-      observer.observe(chatContainer, {
+      chatObserver.observe(chatContainer, {
         childList: true,
         subtree: true
       });
+    } else {
+      console.warn('Snwitch: Chat container not found, falling back to interval-only processing');
     }
   }
 
