@@ -1,0 +1,31 @@
+/* Snwitch - Styling for highlighted moderators */
+
+/* Highlight chat messages from users who mod other channels */
+.snwitch-mod-highlight {
+  background-color: rgba(145, 71, 255, 0.15) !important;
+  border-left: 3px solid #9147ff !important;
+  padding-left: 5px !important;
+  transition: background-color 0.3s ease;
+}
+
+.snwitch-mod-highlight:hover {
+  background-color: rgba(145, 71, 255, 0.25) !important;
+}
+
+/* Badge indicator for moderators */
+.snwitch-mod-badge {
+  display: inline-block;
+  margin-left: 4px;
+  font-size: 0.9em;
+  vertical-align: middle;
+  cursor: help;
+}
+
+/* Make sure the highlighting works with dark and light modes */
+body[data-theme="dark"] .snwitch-mod-highlight {
+  background-color: rgba(145, 71, 255, 0.2) !important;
+}
+
+body[data-theme="light"] .snwitch-mod-highlight {
+  background-color: rgba(145, 71, 255, 0.1) !important;
+}
